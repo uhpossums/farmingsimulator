@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Farming Simulator</title>
+<style>
+body {
+  margin: 0;
+  overflow: hidden;
+  background-color: #87CEEB;
+  font-family: Arial, sans-serif;
+}
+#gameCanvas {
+  display: block;
+  background-color: #87CEEB;
+}
+
+/* Buttons */
+#upgradesButton, #levelUpButton, #saveButton {
+  position: absolute;
+  padding: 8px 12px;
+  background-color: #fff;
+  border: 2px solid #000;
+  cursor: pointer;
+  font-weight: bold;
+  z-index: 10;
+}
+#upgradesButton { top: 40px; right: 20px; }
+#levelUpButton { top: 80px; right: 20px; }
+#saveButton { top: 120px; right: 20px; }
+
+#upgradesMenu {
+  position: absolute;
+  top: 160px;
+  right: 20px;
+  background-color: #fff;
+  border: 2px solid #000;
+  display: none;
+  padding: 10px;
+  width: 360px;
+  z-index: 10;
+  display: flex;
+  justify-content: space-between;
+}
+
+.upgrade-column { width: 45%; }
+.upgrade-category { font-weight: bold; margin-top: 8px; margin-bottom: 4px; }
+.upgrade-item { padding: 4px 0; cursor: pointer; }
+.upgrade-item:hover { background-color: #eee; }
+.buy-max { font-size: 12px; margin-left: 4px; cursor: pointer; color: blue; }
+.maxed { color: red; font-weight: bold; margin-left: 4px; }
+</style>
+</head>
+<body>
+<canvas id="gameCanvas" width="800" height="600"></canvas>
+
+<!-- Buttons -->
+<div id="upgradesButton">Upgrades</div>
+<div id="levelUpButton"></div>
+<div id="saveButton">Save</div>
+
+<div id="upgradesMenu">
+  <div class="upgrade-column" id="cropUpgrades">
+    <div class="upgrade-category">Crop Upgrades</div>
+    <div class="upgrade-item" id="fasterGrowth">Faster Growth ($50) - Level 0 <span class="buy-max">(Buy Max)</span></div>
+    <div class="upgrade-item" id="higherYield">Higher Yield ($50) - Level 0 <span class="buy-max">(Buy Max)</span></div>
+  </div>
+  <div class="upgrade-column" id="regularUpgrades">
+    <div class="upgrade-category">Regular Upgrades</div>
+    <div class="upgrade-item" id="fasterMovement">Faster Movement ($50) - Level 0 <span class="buy-max">(Buy Max)</span></div>
+    <div class="upgrade-item" id="moreMoney">More Money per Wheat ($50) - Level 0 <span class="buy-max">(Buy Max)</span></div>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+// Player settings
+const player = { x:50, y:50, size:40, color:'red', speed:5 };
+
+// Grid settings
+const plotSize = 40;
+const spacing = 8;
+const rows = 10;
+const cols = 10;
+const plots = [];
+
+// Money
+let money = 0;
+
+// Crop progression
+const cropLevels = [
+  {name:'Wheat', price:0, color:'yellow', yield:1},
+  {name:'Tomato', price:100, color:'red', yield:5},
+  {name:'Watermelon', price:500, color:'green', yield:15},
+  {name:'Carrot', price:2500, color:'orange', yield:30},
+  {name:'Cherry Blossom', price:15000, color:'pink', yield:75},
+  {name:'Fern', price:50000, color:'darkgreen', yield:150}
+];
+let cropIndex = 0;
+let cropColor = cropLevels[cropIndex].color;
+let wheatYield = cropLevels[cropIndex].yield;
+let growTime = 3000;
+
+// Create grid plots
+for(let r=0;r<rows;r++){
+  for(let c=0;c<cols;c++){
+    plots.push({x:50+c*(plotSize+spacing), y:50+r*(plotSize+spacing), width:plotSize, height:plotSize, hasWheat:true});
+  }
+}
+
+// Key handling
+const keys = {};
+window.addEventListener('keydown', e=>keys[e.key]=true);
+window.addEventListener('keyup', e=>keys[e.key]=false);
+
+// Upgrade levels
+let upgradeLevels = { fasterGrowth:0, higherYield:0, fasterMovement:0, moreMoney:0 };
+
+// UI Elements
+const upgradesButton = document.getElementById('upgradesButton');
+const upgradesMenu = document.getElementById('upgradesMenu');
+const levelUpButton = document.getElementById('levelUpButton');
+const saveButton = document.getElementById('saveButton');
+
+// Update Level Up Crop button text
+function updateLevelUpButton(){
+  if(cropIndex+1 < cropLevels.length){
+    const next = cropLevels[cropIndex+1];
+    levelUpButton.textContent = `Level Up Crop ($${next.price}) → ${next.name}`;
+  } else {
+    levelUpButton.textContent = `Max Crop Reached`;
+  }
+}
+updateLevelUpButton();
+
+// Toggle upgrades menu
+upgradesButton.addEventListener('click', ()=> {
+  upgradesMenu.style.display = upgradesMenu.style.display==='flex'?'none':'flex';
+});
+
+// Helper to update upgrade text
+function updateUpgradeText(id, level, max=false){
+  const el = document.getElementById(id);
+  el.textContent = el.textContent.split(' - ')[0]+` - Level ${level} `;
+  el.innerHTML += max?' <span class="maxed">(MAX)</span>':'<span class="buy-max">(Buy Max)</span>';
+}
+
+// Buy Max helper
+function buyMax(upgrade, cost, applyFunc, id, maxLevel=Infinity){
+  while(money>=cost && upgradeLevels[upgrade]<maxLevel){
+    money -= cost;
+    applyFunc();
+    upgradeLevels[upgrade]++;
+    updateUpgradeText(id, upgradeLevels[upgrade], upgradeLevels[upgrade]===maxLevel);
+  }
+}
+
+// Upgrade click handlers
+document.getElementById('fasterGrowth').addEventListener('click', ()=>buyMax('fasterGrowth',50,()=>growTime=Math.max(500,growTime-500),'fasterGrowth'));
+document.getElementById('higherYield').addEventListener('click', ()=>buyMax('higherYield',50,()=>wheatYield+=1,'higherYield'));
+document.getElementById('fasterMovement').addEventListener('click', ()=>buyMax('fasterMovement',50,()=>player.speed+=1,'fasterMovement',5)); // capped at 5
+document.getElementById('moreMoney').addEventListener('click', ()=>buyMax('moreMoney',50,()=>wheatYield+=1,'moreMoney'));
+
+// Level Up Crop button
+levelUpButton.addEventListener('click', ()=> {
+  if(cropIndex+1 < cropLevels.length && money >= cropLevels[cropIndex+1].price){
+    money -= cropLevels[cropIndex+1].price;
+    cropIndex++;
+    cropColor = cropLevels[cropIndex].color;
+    wheatYield = cropLevels[cropIndex].yield;
+    updateLevelUpButton();
+  }
+});
+
+// Save game state function
+function saveGame() {
+  const gameState = {
+    money,
+    cropIndex,
+    upgradeLevels,
+    growTime,
+    wheatYield,
+    playerSpeed: player.speed
+  };
+  localStorage.setItem('farmingSimSave', JSON.stringify(gameState));
+  alert('Game saved!');
+}
+
+// Load game state function
+function loadGame() {
+  const saved = localStorage.getItem('farmingSimSave');
+  if (saved) {
+    const state = JSON.parse(saved);
+    money = state.money;
+    cropIndex = state.cropIndex;
+    upgradeLevels = state.upgradeLevels;
+    growTime = state.growTime;
+    wheatYield = state.wheatYield;
+    player.speed = state.playerSpeed;
+    updateLevelUpButton();
+    // Update upgrade UI to match saved levels
+    for (const id in upgradeLevels) {
+      updateUpgradeText(id, upgradeLevels[id]);
+    }
+  }
+}
+
+// Save button click
+saveButton.addEventListener('click', saveGame);
+
+// Load saved game on page load
+loadGame();
+
+function update(){
+  if(keys['ArrowLeft']||keys['a']) player.x-=player.speed;
+  if(keys['ArrowRight']||keys['d']) player.x+=player.speed;
+  if(keys['ArrowUp']||keys['w']) player.y-=player.speed;
+  if(keys['ArrowDown']||keys['s']) player.y+=player.speed;
+
+  player.x = Math.max(0,Math.min(canvas.width-player.size, player.x));
+  player.y = Math.max(0,Math.min(canvas.height-player.size, player.y));
+
+  plots.forEach(plot=>{
+    if(plot.hasWheat && isColliding(player, plot)){
+      plot.hasWheat=false;
+      money += wheatYield;
+      setTimeout(()=>plot.hasWheat=true, growTime);
+    }
+  });
+}
+
+function draw(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  plots.forEach(plot=>{
+    ctx.fillStyle='brown';
+    ctx.fillRect(plot.x,plot.y,plot.width,plot.height);
+    if(plot.hasWheat){
+      ctx.fillStyle=cropColor;
+      ctx.fillRect(plot.x+8,plot.y+8,plot.width-16,plot.height-16);
+    }
+  });
+
+  ctx.fillStyle=player.color;
+  ctx.fillRect(player.x,player.y,player.size,player.size);
+
+  // Money + current crop
+  ctx.fillStyle='black';
+  ctx.font='24px Arial';
+  ctx.textAlign='right';
+  ctx.fillText(`$${money} (${cropLevels[cropIndex].name})`, canvas.width-20,30);
+}
+
+function isColliding(a,b){
+  return a.x<b.x+b.width && a.x+a.size>b.x && a.y<b.y+b.height && a.y+a.size>b.y;
+}
+
+function gameLoop(){ update(); draw(); requestAnimationFrame(gameLoop); }
+gameLoop();
+</script>
+</body>
+</html>
